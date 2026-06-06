@@ -1,0 +1,74 @@
+[package]
+name = "crumble"
+description = "Cross-platform browser artifact and credential extractor for authorized red team engagements: enumerates browsers and profiles, and extracts (and, where the platform allows, decrypts) logins, cookies, cards, tokens, history and more."
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://example.invalid/crumble"
+keywords = ["red-team", "browser-forensics", "credentials", "cookies", "dfir"]
+categories = ["command-line-utilities", "security"]
+
+[lints.rust]
+# `unsafe` is denied crate-wide in lib.rs and allowed only inside the
+# platform-FFI modules (src/keychain.rs, src/win32/*).
+
+[lib]
+name = "crumble"
+path = "src/lib.rs"
+
+[[bin]]
+name = "crumble"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Browser stores are SQLite. `bundled` compiles SQLite from source (no
+# system-library dependency); `backup` enables the online-backup API used as
+# the consistent-snapshot fallback for locked live databases.
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+
+# Chromium secret decryption: v10/v20 blobs are AES-256-GCM under the master
+# key (Windows); legacy Unix v10 is AES-128-CBC under a PBKDF2-SHA1 key.
+aes-gcm = "0.10"
+aes = "0.8"
+cbc = "0.1"
+pbkdf2 = "0.12"
+sha1 = "0.10"
+# Cookie plaintexts from cookie-DB v24+ carry a SHA-256(host_key) prefix that
+# must be verified before stripping.
+sha2 = "0.10"
+
+# Local State key blobs are base64 with an ASCII provider prefix.
+base64 = "0.22"
+
+# Unguessable per-run auth token for the Windows payload channel.
+getrandom = "0.2"
+
+# EDR/AV product detection for the polite-by-default key-retrieval gate.
+sysinfo = "0.39"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_IO",
+    "Win32_System_Kernel",
+    "Win32_System_Memory",
+    "Win32_System_Pipes",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1
