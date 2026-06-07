@@ -28,7 +28,7 @@ pub(crate) fn all_rows(
     }
     if opts.wants_artifact("credentials") {
         logins_json(
-            profile.path.join("logins.json"),
+            &profile.path.join("logins.json"),
             browser,
             profile,
             opts,
@@ -83,7 +83,7 @@ pub(crate) fn all_rows(
     }
     if opts.wants_artifact("extensions") {
         extensions(
-            profile.path.join("extensions.json"),
+            &profile.path.join("extensions.json"),
             browser,
             profile,
             opts,
@@ -95,7 +95,7 @@ pub(crate) fn all_rows(
 /// `logins.json`: usernames/passwords are NSS-encrypted (unsupported);
 /// hostname + password_stored are the exposure proof.
 fn logins_json(
-    path: std::path::PathBuf,
+    path: &std::path::Path,
     browser: &Browser,
     profile: &Profile,
     opts: &RunOptions,
@@ -106,7 +106,7 @@ fn logins_json(
     if !path.is_file() {
         return;
     }
-    let parsed = std::fs::read_to_string(&path)
+    let parsed = std::fs::read_to_string(path)
         .ok()
         .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok());
     let Some(json) = parsed else {
@@ -122,7 +122,7 @@ fn logins_json(
     let Some(logins) = json.get("logins").and_then(serde_json::Value::as_array) else {
         return;
     };
-    // Exact exposure count — the full array, before the max_items cap below.
+    // Exact exposure count: the full array, before the max_items cap below.
     summary.credential_count = summary
         .credential_count
         .saturating_add(logins.len().min(u32::MAX as usize) as u32);
@@ -154,7 +154,7 @@ fn cookies(
     summary: &mut ProfileSummary,
     errors: &mut Vec<String>,
 ) {
-    // Exact exposure count first — independent of the max_items sample cap.
+    // Exact exposure count first, independent of the max_items sample cap.
     summary.cookie_count = summary
         .cookie_count
         .saturating_add(crate::stores::count_rows(
@@ -177,8 +177,8 @@ fn cookies(
             if opts.max_items != 0 && report.cookies.len() >= opts.max_items as usize {
                 return true;
             }
-            // Firefox stores cookie values in PLAINTEXT — still secret-tier, as
-            // session cookies are credential-equivalent.
+            // Firefox stores cookie values in plaintext; session cookies are
+            // credential-equivalent, so they land in the same row type.
             let value = text(row, 6);
             report.cookies.push(Cookie {
                 browser: browser.id.to_string(),
@@ -206,7 +206,7 @@ fn history(
     errors: &mut Vec<String>,
 ) {
     let cutoff = crate::stores::unix_cutoff_us(opts.history_days);
-    // Exact exposure count first — independent of the max_items sample cap.
+    // Exact exposure count first, independent of the max_items sample cap.
     summary.history_count = summary
         .history_count
         .saturating_add(crate::stores::count_since(
@@ -323,13 +323,13 @@ fn autofill(
 
 /// The `extensions.json` registry (no XPI digging for id/name/version).
 fn extensions(
-    path: std::path::PathBuf,
+    path: &std::path::Path,
     browser: &Browser,
     profile: &Profile,
     opts: &RunOptions,
     report: &mut Report,
 ) {
-    let Ok(content) = std::fs::read_to_string(&path) else {
+    let Ok(content) = std::fs::read_to_string(path) else {
         return;
     };
     let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) else {

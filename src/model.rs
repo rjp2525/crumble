@@ -120,7 +120,7 @@ pub struct Token {
     pub browser: String,
     pub profile: String,
     pub provider: String,
-    /// The `service` key — identifies the signed-in account.
+    /// The `service` key, identifying the signed-in account.
     pub client_id: String,
     pub access_token: String,
     /// Decrypted refresh token; empty when no key resolved or decryption failed.
@@ -207,9 +207,9 @@ pub struct Finding {
     pub evidence: BTreeMap<String, String>,
 }
 
-/// The full run output. Everything collected is emitted: there is no
-/// consent-tier filtering — the operator's selection decides what is
-/// attempted, and whatever a store yields lands here.
+/// The full run output. Everything collected is emitted: the operator's
+/// selection decides what is attempted, and whatever a store yields lands
+/// here.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Report {
     pub generated_at: String,

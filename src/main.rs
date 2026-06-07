@@ -1,18 +1,18 @@
-//! crumble — browser artifact/credential extraction for authorized red team
-//! engagements. Library entry points live in `lib.rs`; this binary wires the
-//! CLI to the pipeline.
+//! crumble binary: wires the CLI in `crumble::cli` to the pipeline in
+//! `crumble::pipeline`. Library entry points live in `lib.rs`.
 //!
-//! On Windows, `main` first checks whether this process IS the in-browser
+//! On Windows, `main` first checks whether this process is the in-browser
 //! payload half of the credential extraction (the injector spawns a
-//! suspended browser instance running this same image; see `crumble::win32`).
-//! That check runs before any argument parsing or output so a hollowed
-//! process never contaminates the channel with ordinary CLI behavior.
+//! suspended browser instance running this same image; see
+//! `crumble::win32`). That check runs before any argument parsing or output,
+//! so a hollowed process never contaminates the channel with ordinary CLI
+//! behavior.
 
 #![deny(unsafe_code)]
 
 fn main() -> anyhow::Result<()> {
     // Same-image re-entry: a hollowed browser process runs this image and
-    // must speak the payload protocol only — before anything else happens.
+    // must speak the payload protocol only, before anything else happens.
     #[cfg(windows)]
     if crumble::win32::proxy::started_as_payload() {
         crumble::win32::proxy::run_payload();
@@ -28,7 +28,7 @@ fn main() -> anyhow::Result<()> {
         .and_then(|()| stdout.flush())
     {
         Ok(()) => Ok(()),
-        // A downstream consumer (head, jq, ...) closed the pipe: exit
+        // A downstream consumer (head, jq, ...) closed the pipe; exit
         // quietly instead of panicking on EPIPE.
         Err(err) if err.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
         Err(err) => Err(err.into()),

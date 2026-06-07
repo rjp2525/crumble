@@ -1,11 +1,11 @@
 //! The fixed-address mailbox page shared by the injector (writer) and the
-//! hollowed payload (reader). The injector plants the request — browser id,
-//! per-run auth token, the discovered per-user user-data root, and the raw
-//! run options — at a known address before resuming the suspended browser;
-//! the payload, re-entered through `main`, finds it via an environment
+//! hollowed payload (reader). The injector plants the request (browser id,
+//! per-run auth token, the discovered per-user user-data root and the raw
+//! run options) at a known address before resuming the suspended browser.
+//! The payload, re-entered through `main`, finds it via an environment
 //! marker. The layout is pure data manipulation so it is unit-testable on
 //! any host; only reading the page in the payload's own address space needs
-//! `unsafe` (and lives in `proxy.rs`).
+//! `unsafe`, and that lives in `proxy.rs`.
 #![allow(unsafe_code)]
 
 /// Environment variable carrying the mailbox address to the payload.
@@ -30,9 +30,9 @@ pub struct Request {
     pub browser_id: String,
     /// Per-run auth token (16 raw bytes); authenticates every pipe frame.
     pub token: Vec<u8>,
-    /// The profile-owning user's user-data root (resolved per user by the
-    /// injector — the payload must NOT re-resolve it from its own
-    /// environment).
+    /// The profile-owning user's user-data root, resolved per user by the
+    /// injector. The payload must NOT re-resolve it from its own
+    /// environment.
     pub user_data: std::path::PathBuf,
     /// The operator's options as JSON.
     pub options_json: String,
@@ -81,8 +81,10 @@ pub fn split_page(page: &[u8]) -> Option<(&[u8], &[u8])> {
     Some((&page[REQUEST_OFFSET..], &page[RESPONSE_OFFSET..]))
 }
 
-/// Decodes a raw request record into its components.
-pub fn decode_request(raw: &[u8]) -> Option<(String, Vec<u8>)> {
+/// Decodes a raw request record into its components: browser id, per-run
+/// auth token, the profile-owning user's user-data root, and the run options
+/// as JSON.
+pub fn decode_request(raw: &[u8]) -> Option<Request> {
     if raw.len() < 8 {
         return None;
     }
@@ -95,12 +97,9 @@ pub fn decode_request(raw: &[u8]) -> Option<(String, Vec<u8>)> {
     if total > RESPONSE_OFFSET - REQUEST_OFFSET || total > raw.len() {
         return None;
     }
-    let id = String::from_utf8(raw[8..8 + id_len].to_vec()).ok()?;
-    Some((id, raw[8 + id_len..total].to_vec()))
-}
-
-/// Decodes a full [`Request`] from the blob.
-pub fn decode_blob(blob: &[u8]) -> Option<Request> {
+    let browser_id = String::from_utf8(raw[8..8 + id_len].to_vec()).ok()?;
+    // Blob: token, NUL-terminated user-data root, options JSON.
+    let blob = &raw[8 + id_len..total];
     if blob.len() < 16 {
         return None;
     }
@@ -108,7 +107,7 @@ pub fn decode_blob(blob: &[u8]) -> Option<Request> {
     let nul = rest.iter().position(|&b| b == 0)?;
     let user_data = String::from_utf8(rest[..nul].to_vec()).ok()?;
     Some(Request {
-        browser_id: String::new(), // filled by decode_request
+        browser_id,
         token: token.to_vec(),
         user_data: std::path::PathBuf::from(user_data),
         options_json: String::from_utf8_lossy(&rest[nul + 1..]).into_owned(),
@@ -158,9 +157,8 @@ mod tests {
         );
 
         let (raw, _response) = split_page(&page).expect("valid page");
-        let (id, decoded_blob) = decode_request(raw).unwrap();
-        assert_eq!(id, "chrome");
-        let request = decode_blob(&decoded_blob).unwrap();
+        let request = decode_request(raw).unwrap();
+        assert_eq!(request.browser_id, "chrome");
         assert_eq!(request.token, vec![9u8; 16]);
         assert_eq!(
             request.user_data,

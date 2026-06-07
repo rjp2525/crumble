@@ -1,6 +1,6 @@
 //! Report serialization: indented JSON, or JSONL with a summary record
 //! followed by one record per artifact row (each carrying a `kind`
-//! discriminator). Everything collected is emitted — there is no
+//! discriminator). Everything collected is emitted; there is no
 //! post-collection field filtering.
 
 use crate::model::Report;

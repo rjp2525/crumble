@@ -3,10 +3,9 @@
 //! Since Chrome 127 the master key in `Local State`
 //! (`os_crypt.app_bound_encrypted_key`) can only be unwrapped by the
 //! browser's elevation service, a COM server that validates the CALLING
-//! process's image path against the browser's own binary — which is why this
-//! client is invoked from inside the hollowed browser process (see
-//! [`super::injector`]). From any other image the server answers
-//! `E_ACCESSDENIED`.
+//! process's image path against the browser's own binary. That is why this
+//! client runs inside the hollowed browser process (see [`super::injector`]);
+//! from any other image the server answers `E_ACCESSDENIED`.
 //!
 //! Interface layout (per the public Chromium `elevator.h` and public
 //! reversing write-ups):
@@ -18,7 +17,8 @@
 //!
 //! `DecryptData(const BSTR ciphertext, BSTR* plaintext, DWORD* last_error)`.
 //! Newer builds expose `IElevator2` with methods appended, which preserves
-//! these slots — trying the v2 IID first and falling back to v1 covers both.
+//! these slots, so trying the v2 IID first and falling back to v1 covers
+//! both.
 #![allow(unsafe_code)]
 
 use std::ffi::c_void;
@@ -85,8 +85,8 @@ pub fn unwrap(spec: &AbeIdentity, ciphertext: &[u8]) -> anyhow::Result<Vec<u8>> 
         let iid = to_sys(iid);
         let mut obj: *mut c_void = std::ptr::null_mut();
         // SAFETY: out-param `obj` is valid for write. A misbehaving server
-        // could return a non-null pointer with a failure HRESULT — released
-        // on that path below.
+        // could return a non-null pointer with a failure HRESULT; it is
+        // released on that path below.
         let hr = unsafe {
             CoCreateInstance(
                 &clsid,
@@ -151,7 +151,7 @@ pub fn unwrap(spec: &AbeIdentity, ciphertext: &[u8]) -> anyhow::Result<Vec<u8>> 
             unsafe { SysFreeString(plain) };
             return Ok(key);
         }
-        // A server may legally set out-params even on failure — free a
+        // A server may legally set out-params even on failure; free a
         // non-null plaintext BSTR rather than leaking it.
         if !plain.is_null() {
             // SAFETY: freeing the returned BSTR once.

@@ -49,10 +49,11 @@ pub enum Family {
     /// Chromium engine: SQLite stores; ABE/DPAPI (Windows), Keychain (macOS)
     /// or hardcoded-key (Linux) master keys.
     Chromium,
-    /// Firefox: SQLite/JSON stores; logins NSS-encrypted (never decrypted —
-    /// metadata only), cookie values plaintext.
+    /// Firefox: SQLite/JSON stores. Logins are NSS-encrypted (metadata
+    /// only, never decrypted); cookie values are plaintext.
     Firefox,
-    /// Safari: binary plist stores keyed to the user's Keychain — inventory.
+    /// Safari: binary plist stores keyed to the user's Keychain. Inventory
+    /// only.
     Safari,
 }
 
@@ -622,7 +623,7 @@ mod windows {
                 local,
             ),
             // Opera's profile data lives in Roaming AppData (stores sit at the
-            // root — the root-layout fallback in `chromium_profiles` covers the
+            // root; the root-layout fallback in `chromium_profiles` covers the
             // missing Default/ subdirectory).
             chromium(
                 "opera",

@@ -1,6 +1,6 @@
 [package]
 name = "crumble"
-description = "Cross-platform browser artifact and credential extractor for authorized red team engagements: enumerates browsers and profiles, and extracts (and, where the platform allows, decrypts) logins, cookies, cards, tokens, history and more."
+description = "Cross-platform browser artifact and credential extractor for authorized red team engagements: enumerates browsers and profiles, then extracts (and, where the platform allows, decrypts) logins, cookies, cards, tokens, history and more."
 version = "0.1.0"
 edition = "2021"
 license = "MIT"

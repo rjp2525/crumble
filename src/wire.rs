@@ -5,10 +5,10 @@
 //! Wire format: each frame is a 4-byte little-endian length prefix followed
 //! by a UTF-8 JSON object. Every frame carries:
 //!
-//! * `auth` — the per-run token the injector generated and handed to the
+//! * `auth`: the per-run token the injector generated and handed to the
 //!   payload through its private mailbox page. A local process that guesses
 //!   the pipe name cannot know it, so its frames are rejected.
-//! * `seq` — a strictly increasing sequence number (0-based), so dropped,
+//! * `seq`: a strictly increasing sequence number (0-based), so dropped,
 //!   duplicated or reordered frames are detected.
 //!
 //! The receiving [`Validator`] additionally enforces the frame state machine
@@ -93,8 +93,8 @@ impl Validator {
 
     /// Validates one raw frame, returning its event. Any protocol violation
     /// (bad auth, sequence gap, state-machine breach, ceiling overflow,
-    /// malformed JSON) is a hard error — the stream aborts, never silently
-    /// accepts.
+    /// malformed JSON) is a hard error: the stream aborts rather than
+    /// silently accepting.
     pub(crate) fn accept(&mut self, frame: &[u8]) -> anyhow::Result<Event> {
         if frame.len() > MAX_FRAME_BYTES {
             anyhow::bail!("frame exceeds {} bytes", MAX_FRAME_BYTES);
@@ -165,8 +165,8 @@ impl Validator {
                 }
                 Ok(Event::Row(row))
             }
-            // Unknown frame types are ignored (forward compatibility) — as
-            // notes so the stream shape is preserved for the caller.
+            // Unknown frame types are ignored (forward compatibility) and
+            // surface as notes so the stream shape is preserved.
             _ => {
                 self.require_status()?;
                 Ok(Event::Note(String::new()))

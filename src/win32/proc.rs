@@ -105,9 +105,9 @@ impl Drop for Child {
     }
 }
 
-/// Builds the double-NUL-terminated environment block CreateProcess expects
-/// (a custom block REPLACES the parent's environment — the child must not
-/// inherit our variables).
+/// Builds the double-NUL-terminated environment block CreateProcess
+/// expects. A custom block REPLACES the parent's environment; the child must
+/// not inherit our variables.
 fn env_block(pairs: &[(String, String)]) -> Vec<u16> {
     let mut out: Vec<u16> = Vec::new();
     for (key, value) in pairs {
@@ -243,7 +243,7 @@ impl AttributeList {
             return Err(last_error("InitializeProcThreadAttributeList(size)"));
         }
         buf = vec![0u8; size];
-        // SAFETY: `buf` is `size` bytes — the value the sizing call wrote.
+        // SAFETY: `buf` is `size` bytes, the value the sizing call wrote.
         let ok =
             unsafe { InitializeProcThreadAttributeList(buf.as_mut_ptr().cast(), 1, 0, &mut size) };
         if ok == 0 {
@@ -520,10 +520,10 @@ pub fn exit_code(child: &Child) -> anyhow::Result<Option<u32>> {
 }
 
 /// Resolves a primary token for the user that owns `user_data`, but only
-/// when we are elevated AND the owner differs from us (an elevated run must
-/// still unwrap DPAPI/ABE secrets in the owner's logon context). `None`
-/// means "spawn in our own context" — the documented fallback whenever the
-/// owner cannot be resolved or impersonated.
+/// when we are elevated and the owner differs from us: an elevated run must
+/// still unwrap DPAPI/ABE secrets in the owner's logon context. `None` means
+/// "spawn in our own context", the documented fallback whenever the owner
+/// cannot be resolved or impersonated.
 pub(crate) fn owner_token_for(user_data: &Path) -> Option<OwnedHandle> {
     let owner = file_owner_sid(user_data)?;
     let ours = current_user_sid()?;

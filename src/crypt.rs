@@ -2,20 +2,20 @@
 //!
 //! Blob formats (all carry a 3-byte ASCII version tag):
 //!
-//! | tag   | meaning                                                         |
-//! |-------|------------------------------------------------------------------|
-//! | `v20` | AES-256-GCM under the App-Bound master key (Windows).            |
-//! | `v10` | Windows: AES-256-GCM under the DPAPI master key.                 |
-//! |       | macOS/Linux: AES-128-CBC under the PBKDF2 legacy key.            |
-//! | `v11` | AES-128-CBC under an OS-keyring key (Linux) — unsupported.       |
-//! | none  | raw DPAPI ciphertext (legacy Windows rows).                      |
+//! | tag   | meaning                                                        |
+//! |-------|-----------------------------------------------------------------|
+//! | `v20` | AES-256-GCM under the App-Bound master key (Windows).           |
+//! | `v10` | Windows: AES-256-GCM under the DPAPI master key.                |
+//! |       | macOS/Linux: AES-128-CBC under the PBKDF2 legacy key.           |
+//! | `v11` | AES-128-CBC under an OS-keyring key (Linux), unsupported.       |
+//! | none  | raw DPAPI ciphertext (legacy Windows rows).                     |
 //!
 //! GCM layout: `tag || nonce(12) || ciphertext || tag(16)`.
-//! CBC layout: `tag || ciphertext` — IV is 16 space bytes, PKCS#7 padding.
+//! CBC layout: `tag || ciphertext`; the IV is 16 space bytes, PKCS#7 padded.
 //!
-//! Current Chromium registers the DPAPI and App-Bound providers at once, so a
-//! migrated profile holds `v20` and `v10` rows simultaneously; both keys are
-//! carried in [`KeyBag`] and dispatch is strictly by blob tag.
+//! Current Chromium registers the DPAPI and App-Bound providers at once, so
+//! a migrated profile holds `v20` and `v10` rows simultaneously. Both keys
+//! are carried in [`KeyBag`] and dispatch is strictly by blob tag.
 
 use aes::cipher::BlockDecryptMut;
 use aes_gcm::aead::{Aead, KeyInit};
@@ -30,7 +30,7 @@ const LEGACY_IV: [u8; 16] = [0x20; 16];
 /// The per-provider master keys a browser may hold simultaneously.
 #[derive(Default)]
 pub struct KeyBag {
-    /// AES-256-GCM App-Bound key (`v20` blobs), from the browser's elevation
+    /// AES-256-GCM App-Bound key (`v20` blobs) from the browser's elevation
     /// service on Windows.
     pub app_bound: Option<[u8; 32]>,
     /// AES-256-GCM DPAPI key (`v10` blobs, Windows).
@@ -41,7 +41,7 @@ pub struct KeyBag {
 }
 
 impl KeyBag {
-    /// True when no provider key resolved (counts-only extraction).
+    /// True when no provider key resolved; extraction continues counts-only.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.app_bound.is_none() && self.dpapi.is_none() && self.legacy.is_none()
@@ -82,18 +82,19 @@ pub fn legacy_key_from_password(password: &[u8], iterations: u32) -> [u8; 16] {
 
 /// Moves a freshly unwrapped 32-byte key into a fixed array, zeroing the
 /// source vector. Windows-only (the unwrap happens inside the payload).
+/// Callers verify the length before calling.
 #[cfg(windows)]
 #[must_use]
-pub fn bag_key32(mut raw: Vec<u8>) -> Option<[u8; 32]> {
+pub fn bag_key32(mut raw: Vec<u8>) -> [u8; 32] {
     let mut key = [0u8; 32];
     key.copy_from_slice(&raw);
     raw.fill(0);
-    Some(key)
+    key
 }
 
 /// Decrypts one blob under the key its version tag selects. Returns `None`
-/// for unsupported formats, missing keys, and authentication/padding
-/// failures — a single hostile blob must never abort a store read.
+/// for unsupported formats, missing keys and authentication or padding
+/// failures; a single hostile blob must never abort a store read.
 #[must_use]
 pub fn unwrap_value(bag: &KeyBag, blob: &[u8]) -> Option<Vec<u8>> {
     match blob.get(..3) {
@@ -110,10 +111,11 @@ pub fn unwrap_value(bag: &KeyBag, blob: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-/// Decrypts a cookie value and applies Chromium's cookie-DB v24 rule (~M128):
-/// plaintexts are prefixed with the SHA-256 digest of the cookie's `host_key`.
-/// The prefix is verified before stripping — older databases carry raw values,
-/// and stripping 32 bytes from those would silently truncate them.
+/// Decrypts a cookie value and applies Chromium's cookie-DB v24 rule (M128
+/// era): plaintexts are prefixed with the SHA-256 digest of the cookie's
+/// `host_key`. The prefix is verified before stripping; older databases carry
+/// raw values, and stripping 32 bytes from those would silently truncate
+/// them.
 #[must_use]
 pub fn unwrap_cookie(bag: &KeyBag, host: &str, blob: &[u8]) -> Option<String> {
     use sha2::Digest;
@@ -151,8 +153,8 @@ fn cbc_open(key: &[u8; 16], data: &[u8]) -> Option<Vec<u8>> {
     Some(buf)
 }
 
-/// On Windows a tag-less blob is a raw DPAPI ciphertext; elsewhere the format
-/// is unknown to us.
+/// On Windows a tag-less blob is raw DPAPI ciphertext; elsewhere the format
+/// is unknown.
 #[cfg(windows)]
 fn untagged_open(blob: &[u8]) -> Option<Vec<u8>> {
     crate::win32::dpapi::unprotect(blob).ok()

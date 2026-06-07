@@ -1,9 +1,10 @@
 //! Run options and their fail-closed selection semantics.
 //!
-//! Selection is validated against the known browser ids and artifact classes:
-//! unknown names are dropped, and a list that names ONLY unknown values makes
-//! the whole selection match nothing — widening an all-typo selection to
-//! "everything" would extract far more than the operator asked for.
+//! Selection is validated against the known browser ids and artifact
+//! classes. Unknown names are dropped, and a list that names ONLY unknown
+//! values makes the whole selection match nothing. Widening an all-typo
+//! selection to "everything" would extract far more than the operator asked
+//! for.
 
 use serde::{Deserialize, Serialize};
 
@@ -39,9 +40,9 @@ pub enum Format {
 /// Everything a run needs to know beyond the environment: what to target and
 /// what to try to collect.
 ///
-/// Serializable: the Windows in-browser payload receives exactly the options
-/// the operator passed (the request channel is the trust boundary — the
-/// payload re-validates them before touching any secret).
+/// Serializable: the Windows in-browser payload receives exactly the
+/// options the operator passed. The request channel is the trust boundary;
+/// the payload re-validates them before touching any secret.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RunOptions {
@@ -57,9 +58,9 @@ pub struct RunOptions {
     /// Off (`--no-decrypt`) = counts + plaintext artifacts only: no keychain
     /// read, no DPAPI/ABE unwrap, no in-browser extraction.
     pub decrypt: bool,
-    /// Skip intrusive key retrieval when an EDR/AV product is detected
-    /// (default off — a standalone operator decides their own risk posture;
-    /// enable on cautious engagements).
+    /// Skip intrusive key retrieval when an EDR/AV product is detected.
+    /// Default off: a standalone operator decides their own risk posture.
+    /// Enable on cautious engagements.
     pub respect_edr: bool,
     /// History/download lookback in days (0 = unlimited).
     pub history_days: u32,
@@ -118,7 +119,7 @@ impl RunOptions {
     }
 }
 
-/// True when `names` is non-empty and every entry is unknown — a restriction
+/// True when `names` is non-empty and every entry is unknown: a restriction
 /// the operator clearly meant, spelled entirely wrong.
 fn is_all_unknown(names: &[String], known: &[&str]) -> bool {
     !names.is_empty() && names.iter().all(|n| !known.contains(&n.as_str()))

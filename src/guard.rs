@@ -1,13 +1,13 @@
-//! EDR/AV detection driving the polite-by-default key-retrieval gate.
+//! EDR/AV detection behind the `--respect-edr` key-retrieval gate.
 //!
 //! When an encrypted artifact class is selected and an EDR/AV product is
 //! running, the pipeline skips its intrusive key-retrieval paths (process
 //! manipulation on Windows, the Keychain read on macOS, the DPAPI unwrap)
-//! and records why: an authorized assessment must not read as an infostealer
-//! to the customer's SOC and get the device isolated. Counts — the exposure
-//! proof — are collected regardless. Matching is case-insensitive substring
-//! over process names, deliberately broad; a false positive only makes the
-//! tool MORE conservative.
+//! and records why: an authorized assessment should not read as an
+//! infostealer to the customer's SOC and get the device isolated. Counts,
+//! the exposure proof, are still collected. Matching is case-insensitive
+//! substring over process names, deliberately broad; a false positive only
+//! makes the tool more conservative.
 
 use sysinfo::{ProcessesToUpdate, System};
 
@@ -72,8 +72,8 @@ const FINGERPRINTS: &[Fingerprint] = &[
     fp("redcanary", "Red Canary"),
 ];
 
-/// The distinct EDR/AV products detected among running processes (sorted,
-/// de-duplicated). Empty = none seen.
+/// The distinct EDR/AV products detected among running processes, sorted
+/// and de-duplicated. Empty means none seen.
 #[must_use]
 pub fn detected() -> Vec<&'static str> {
     let mut sys = System::new();

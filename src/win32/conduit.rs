@@ -3,11 +3,11 @@
 //! The pipe carries the payload's extraction stream (frames per
 //! [`crate::wire`]). Names mimic the browser's own IPC pattern
 //! (`\\.\pipe\{browser}.nacl.<nonce>`) so a pipe listing looks like ordinary
-//! browser traffic; the nonce is drawn from the OS CSPRNG so the name is
-//! unguessable — a predictable name invites squatting by another local
+//! browser traffic. The nonce comes from the OS CSPRNG, so the name is
+//! unguessable; a predictable name invites squatting by another local
 //! process. The permissive Everyone DACL is deliberate: the payload may run
-//! as the profile-owning user (different from us when elevated), and the real
-//! guards are the unguessable name, the per-frame auth token, and the
+//! as the profile-owning user (different from us when elevated), so the real
+//! guards are the unguessable name, the per-frame auth token and the
 //! client-PID check.
 #![allow(unsafe_code)]
 
@@ -89,8 +89,8 @@ impl Listener {
         })
     }
 
-    /// Blocks until the payload connects (returns immediately if it already
-    /// has — a raced connect shows ERROR_PIPE_CONNECTED).
+    /// Blocks until the payload connects. Returns immediately if it already
+    /// has; a raced connect shows ERROR_PIPE_CONNECTED.
     pub fn wait_connected(&self) -> anyhow::Result<()> {
         // SAFETY: live pipe handle.
         let ok = unsafe { ConnectNamedPipe(self.handle.raw(), std::ptr::null_mut()) };
@@ -104,7 +104,7 @@ impl Listener {
         Ok(())
     }
 
-    /// Verifies the connected client's PID is the spawned payload's — call
+    /// Verifies the connected client's PID is the spawned payload's. Call
     /// after [`wait_connected`] so a same-user racer is rejected, not read.
     pub fn verify_client_pid(&self, expected: u32) -> anyhow::Result<()> {
         let mut pid = 0u32;

@@ -1,5 +1,5 @@
 //! Chromium store extraction: `Login Data` (+ account variant), `Web Data`,
-//! `Cookies`, `History`, `Bookmarks`, and the `Secure Preferences` /
+//! `Cookies`, `History`, `Bookmarks` and the `Secure Preferences` /
 //! `Preferences` extension registry.
 //!
 //! Credential-class rows are streamed through a sink so the Windows hollowed
@@ -85,9 +85,9 @@ pub(crate) fn credential_rows(
 }
 
 /// Extracts the plaintext (non-credential) stores of one Chromium profile:
-/// history, downloads, bookmarks, extensions. These carry no secrets and are
-/// always read locally — on Windows, even when credential stores went through
-/// the hollowed payload.
+/// history, downloads, bookmarks and extensions. These carry no secrets and
+/// are always read locally; on Windows that stays true even when the
+/// credential stores went through the hollowed payload.
 pub(crate) fn plaintext_rows(
     browser: &Browser,
     profile: &Profile,
@@ -147,7 +147,7 @@ fn logins(
     errors: &mut Vec<String>,
     sink: &mut dyn FnMut(Row),
 ) {
-    // Exact exposure count first — independent of the max_items sample cap.
+    // Exact exposure count first, independent of the max_items sample cap.
     summary.credential_count = summary
         .credential_count
         .saturating_add(count_rows(db, "SELECT COUNT(*) FROM logins"));
@@ -330,7 +330,7 @@ fn cookies(
     errors: &mut Vec<String>,
     sink: &mut dyn FnMut(Row),
 ) {
-    // Exact exposure count first — independent of the max_items sample cap.
+    // Exact exposure count first, independent of the max_items sample cap.
     summary.cookie_count = summary
         .cookie_count
         .saturating_add(count_rows(db, "SELECT COUNT(*) FROM cookies"));
@@ -344,7 +344,7 @@ fn cookies(
         let secret = blob(row, 6);
         // Chromium prefers encrypted_value; the plaintext `value` column is
         // the fallback for rows written unencrypted (crypto disabled or
-        // legacy pre-encryption records) — mirroring the upstream loader.
+        // legacy pre-encryption records), mirroring the upstream loader.
         let value = crypt::unwrap_cookie(bag, &host, &secret)
             .filter(|v| !v.is_empty())
             .unwrap_or_else(|| text(row, 7));
@@ -373,7 +373,7 @@ fn history(
     errors: &mut Vec<String>,
 ) {
     let cutoff = stores::chrome_cutoff_us(opts.history_days);
-    // Exact exposure count first — independent of the max_items sample cap.
+    // Exact exposure count first, independent of the max_items sample cap.
     summary.history_count = summary.history_count.saturating_add(count_since(
         db,
         "SELECT COUNT(*) FROM urls WHERE last_visit_time >= ?1",

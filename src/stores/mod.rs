@@ -1,9 +1,9 @@
 //! Store access shared by the per-browser extractors.
 //!
 //! Robustness rules: stores are hostile input and schemas drift between
-//! browser versions, so every artifact function fails OPEN (records the
-//! failure and returns what it has) — never panics, never aborts the
-//! profile. An existing store that cannot be read is recorded
+//! browser versions, so every artifact function fails open. It records the
+//! failure, returns what it has and never panics or aborts the profile. An
+//! existing store that cannot be read is recorded
 //! ("browser/profile/store: reason"); it must never masquerade as an empty
 //! one.
 
@@ -25,8 +25,8 @@ pub(crate) fn note_error(
     errors.push(format!("{}/{}/{store}: {reason}", browser.id, profile.name));
 }
 
-/// Snapshot-plus-open: `None` when the store simply does not exist, but an
-/// EXISTING store that cannot be opened is recorded — it must never read as
+/// Snapshot-plus-open. `None` when the store does not exist at all, but an
+/// existing store that cannot be opened is recorded; it must never read as
 /// "zero rows". The returned [`sniff::Snapshot`] keeps the copy alive while
 /// the connection reads it lazily.
 pub(crate) fn open_store(
@@ -49,10 +49,10 @@ pub(crate) fn open_store(
         );
         return None;
     };
-    // The copy is ours — open it read-write: a copied WAL sidecar makes
+    // The copy is ours: open it read-write. A copied WAL sidecar makes
     // read-only opens fail (SQLite cannot rebuild the wal-index otherwise).
-    // This is where crash recovery of the copied store happens, which is also
-    // what makes the plain byte copy consistent.
+    // Crash recovery of the copied store happens here, which is also what
+    // makes the plain byte copy consistent.
     match Connection::open(&copy) {
         Ok(conn) => Some((conn, guard)),
         Err(_) => {
@@ -121,7 +121,7 @@ pub(crate) fn int(row: &Row, idx: usize) -> i64 {
     row.get::<_, Option<i64>>(idx).ok().flatten().unwrap_or(0)
 }
 
-/// Exact row total for one store — counts are the exposure signal and must
+/// Exact row total for one store. Counts are the exposure signal and must
 /// not shrink with the `max_items` sample cap.
 pub(crate) fn count_rows(db: &Connection, sql: &str) -> u32 {
     count_query(db, sql, [])
@@ -168,8 +168,7 @@ pub(crate) fn unix_cutoff_us(history_days: u32) -> i64 {
 fn now_unix_us() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_micros() as i64)
-        .unwrap_or(0)
+        .map_or(0, |d| d.as_micros() as i64)
 }
 
 /// µs in `history_days`, clamped so an absurd value can never overflow (100

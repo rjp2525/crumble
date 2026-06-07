@@ -1,8 +1,8 @@
 //! Least-alarming access to live browser databases.
 //!
-//! Live stores (`Login Data`, `Cookies`, `Web Data`, `History`, ...) are never
-//! opened through SQLite. Each is byte-copied — plain sequential file reads,
-//! no locks, no write intent — together with its WAL sidecars into a private,
+//! Live stores (`Login Data`, `Cookies`, `Web Data`, `History`) are never
+//! opened through SQLite. Each is byte-copied (plain sequential file reads,
+//! no locks, no write intent) together with its WAL sidecars into a private,
 //! owner-only temp directory under a neutral name, and all database work runs
 //! against the copy (SQLite crash recovery over the copied WAL makes the copy
 //! consistent). The browser is never disturbed and the live store paths see
@@ -14,15 +14,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// A private temp directory holding one copied database; removed on drop.
 pub struct Snapshot {
     dir: PathBuf,
-    copy: PathBuf,
-}
-
-impl Snapshot {
-    /// The copied database's path inside the directory.
-    #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.copy
-    }
 }
 
 impl Drop for Snapshot {
@@ -51,8 +42,7 @@ pub fn snapshot(path: &Path) -> Option<(Snapshot, PathBuf)> {
         let seq = SEQ.fetch_add(1, Ordering::Relaxed);
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_nanos());
         let dir = std::env::temp_dir().join(format!("crumble-{pid}-{seq}-{nanos:x}"));
         // `mut` is only needed on Unix, where the mode is set below.
         #[cfg_attr(not(unix), allow(unused_mut))]
@@ -82,13 +72,7 @@ pub fn snapshot(path: &Path) -> Option<(Snapshot, PathBuf)> {
             let _ = std::fs::remove_dir_all(&dir);
             return None;
         }
-        return Some((
-            Snapshot {
-                dir: dir.clone(),
-                copy: copy.clone(),
-            },
-            copy,
-        ));
+        return Some((Snapshot { dir }, copy));
     }
     None
 }

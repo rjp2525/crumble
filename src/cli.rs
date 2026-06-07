@@ -1,11 +1,11 @@
-//! Command-line parsing (manual — no argument-parsing dependency).
+//! Command-line parsing by hand; no argument-parsing dependency.
 
 use anyhow::{bail, Context};
 
 use crate::options::{Format, RunOptions};
 
 const USAGE: &str = "\
-crumble — extract the crumbs browsers leave behind (authorized use only)
+crumble: extract the crumbs browsers leave behind (authorized use only)
 
 USAGE:
     crumble [OPTIONS]
@@ -19,7 +19,7 @@ OPTIONS:
         --no-decrypt        counts + plaintext artifacts only: no keychain read, no
                             DPAPI/ABE unwrap, no in-browser extraction
         --respect-edr       skip intrusive key retrieval when EDR/AV is detected
-                            (default off — you decide your own risk posture)
+                            (default off: you decide your own risk posture)
         --no-respect-edr    attempt decryption even with EDR/AV present (default)
         --history-days <n>  limit history/download lookback to the last n days (0 = all)
         --max-items <n>     cap rows per artifact class across the run (0 = all);

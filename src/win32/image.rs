@@ -1,5 +1,5 @@
-//! PE (Portable Executable) header parsing for same-image process hollowing —
-//! pure safe byte math, no OS interaction.
+//! PE (Portable Executable) header parsing for same-image process hollowing.
+//! Pure safe byte math, no OS interaction.
 //!
 //! The injector maps THIS executable into a suspended browser process as a
 //! genuine `SEC_IMAGE` view, so the OS loader performs all relocation,

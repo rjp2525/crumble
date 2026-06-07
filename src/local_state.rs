@@ -1,6 +1,7 @@
 //! Parsing of a Chromium user-data root's `Local State` file: the wrapped
-//! master keys (`os_crypt.app_bound_encrypted_key` / `os_crypt.encrypted_key`)
-//! and the profile display-name map (`profile.info_cache`).
+//! master keys (`os_crypt.app_bound_encrypted_key`,
+//! `os_crypt.encrypted_key`) and the profile display-name map
+//! (`profile.info_cache`).
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -9,16 +10,16 @@ use std::path::Path;
 use base64::Engine;
 
 /// Both wrapped master keys from `Local State`. Current Chromium registers
-/// the DPAPI and App-Bound providers simultaneously — a migrated profile
-/// holds NEW v20 rows (ABE key) and legacy v10 rows (DPAPI key) at once, so
-/// both wrapped keys must be carried, not just the "best" one.
+/// the DPAPI and App-Bound providers at the same time, so a migrated profile
+/// holds new v20 rows (ABE key) and legacy v10 rows (DPAPI key) together.
+/// Both wrapped keys must be carried, not just the "best" one.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct WrappedKeys {
-    /// `app_bound_encrypted_key` with the 4-byte `"APPB"` prefix stripped —
-    /// decryptable only by the browser's ABE elevation service.
+    /// `app_bound_encrypted_key` with the 4-byte `"APPB"` prefix stripped.
+    /// Decryptable only by the browser's ABE elevation service.
     pub app_bound: Option<Vec<u8>>,
-    /// `encrypted_key` with the 5-byte `"DPAPI"` prefix stripped —
-    /// decryptable with DPAPI as the current user.
+    /// `encrypted_key` with the 5-byte `"DPAPI"` prefix stripped.
+    /// Decryptable with DPAPI as the current user.
     pub dpapi: Option<Vec<u8>>,
 }
 
@@ -31,8 +32,8 @@ impl WrappedKeys {
 }
 
 /// Reads every available wrapped master key from `<user_data>/Local State`.
-/// Windows + tests only (production key resolution happens inside the
-/// hollowed Windows payload).
+/// Windows and tests only: production key resolution happens inside the
+/// hollowed Windows payload.
 #[cfg(any(windows, test))]
 #[must_use]
 pub fn wrapped_keys(user_data: &Path) -> WrappedKeys {
@@ -52,8 +53,8 @@ pub fn wrapped_keys(user_data: &Path) -> WrappedKeys {
     keys
 }
 
-/// Base64-decodes a stored key and strips its ASCII prefix (`"APPB"` is 4
-/// bytes, `"DPAPI"` 5), mirroring Chromium's `os_crypt` sync.
+/// Base64-decodes a stored key and strips its ASCII prefix ("APPB" is 4
+/// bytes, "DPAPI" 5), mirroring Chromium's `os_crypt` sync.
 #[cfg(any(windows, test))]
 fn decode_prefixed(b64: &str, prefix: &[u8]) -> Option<Vec<u8>> {
     let raw = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
@@ -63,8 +64,8 @@ fn decode_prefixed(b64: &str, prefix: &[u8]) -> Option<Vec<u8>> {
     Some(raw[prefix.len()..].to_vec())
 }
 
-/// Maps profile directory names ("Default", "Profile 1", ...) to the
-/// human-facing names recorded in `Local State` (`profile.info_cache`).
+/// Maps profile directory names ("Default", "Profile 1", ...) to the names
+/// recorded in `Local State` (`profile.info_cache`).
 #[must_use]
 pub fn profile_display_names(user_data: &Path) -> HashMap<String, String> {
     let mut out = HashMap::new();
@@ -81,7 +82,7 @@ pub fn profile_display_names(user_data: &Path) -> HashMap<String, String> {
     out
 }
 
-/// Parses `<user_data>/Local State`, tolerating a missing or malformed file.
+/// Parses `<user_data>/Local State`; a missing or malformed file yields None.
 fn local_state_json(user_data: &Path) -> Option<serde_json::Value> {
     let content = std::fs::read_to_string(user_data.join("Local State")).ok()?;
     serde_json::from_str(&content).ok()

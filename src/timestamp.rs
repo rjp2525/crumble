@@ -1,14 +1,14 @@
-//! Timestamp conversion: Chromium stores microseconds since 1601-01-01 UTC,
-//! Firefox microseconds since 1970-01-01, and the report wants ISO-8601
-//! strings. No date library — the civil-from-days math is the standard
-//! proleptic-Gregorian algorithm, unit-tested against known dates.
+//! Timestamp conversion: Chromium stores microseconds since 1601-01-01 UTC
+//! and Firefox microseconds since 1970-01-01; the report wants ISO 8601
+//! strings. No date library: the civil-from-days math is the standard
+//! proleptic Gregorian algorithm, unit-tested against known dates.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Seconds between the Windows (1601) and Unix (1970) epochs.
 pub const EPOCH_DELTA_SECS: i64 = 11_644_473_600;
 
-/// Largest representable ISO-8601 year-9999 timestamp (9999-12-31T23:59:59Z).
+/// Largest representable ISO 8601 timestamp (9999-12-31T23:59:59Z).
 const MAX_UNIX_SECS: i64 = 253_402_300_799;
 
 /// Now, as an ISO-8601 UTC string.
@@ -16,13 +16,12 @@ const MAX_UNIX_SECS: i64 = 253_402_300_799;
 pub fn now_iso() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_secs() as i64);
     unix_to_iso(secs)
 }
 
-/// Chromium µs-since-1601 → ISO-8601. Zero/negative/out-of-range → "" (the
-/// report's "unknown" representation).
+/// Chromium µs since 1601 to ISO 8601. Zero, negative and out-of-range
+/// values become "" (the report's "unknown" representation).
 #[must_use]
 pub fn chrome_us_to_iso(chrome_us: i64) -> String {
     if chrome_us <= 0 {
@@ -31,7 +30,7 @@ pub fn chrome_us_to_iso(chrome_us: i64) -> String {
     unix_to_iso(chrome_us / 1_000_000 - EPOCH_DELTA_SECS)
 }
 
-/// Firefox µs-since-1970 → ISO-8601; same empty-string rule as
+/// Firefox µs since 1970 to ISO 8601. Same empty-string rule as
 /// [`chrome_us_to_iso`].
 #[must_use]
 pub fn unix_us_to_iso(unix_us: i64) -> String {
@@ -41,7 +40,7 @@ pub fn unix_us_to_iso(unix_us: i64) -> String {
     unix_to_iso(unix_us / 1_000_000)
 }
 
-/// Unix seconds → ISO-8601 UTC. Out-of-range → "".
+/// Unix seconds to ISO 8601 UTC. Out-of-range becomes "".
 #[must_use]
 pub fn unix_to_iso(unix_secs: i64) -> String {
     if !(0..=MAX_UNIX_SECS).contains(&unix_secs) {
@@ -56,7 +55,7 @@ pub fn unix_to_iso(unix_secs: i64) -> String {
     format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
 }
 
-/// Days since 1970-01-01 → (year, month, day), proleptic Gregorian.
+/// Days since 1970-01-01 to (year, month, day), proleptic Gregorian.
 fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
