@@ -110,6 +110,13 @@ fn collect_browser(
     report_out: &mut Report,
     errors: &mut Vec<String>,
 ) -> String {
+    // Firefox resolves its per-profile key4.db locally with no intrusive
+    // step, so it runs whenever decryption is on, ahead of the gates below
+    // (which exist for Chromium's invasive key retrieval and Safari's
+    // inventory-only scope).
+    if browser.family == Family::Firefox {
+        return collect_fallback(browser, opts, report_out, errors);
+    }
     if !credential_classes_selected(opts) {
         collect_fallback(browser, opts, report_out, errors);
         return "not-requested".to_string();
@@ -139,9 +146,18 @@ fn collect_with_keys(
     }
     #[cfg(not(windows))]
     {
-        let outcome = keys::resolve(browser);
-        collect_local(browser, &outcome.bag, opts, report_out, errors);
-        outcome.status
+        match browser.family {
+            Family::Chromium => {
+                let outcome = keys::resolve_chromium(browser);
+                collect_local(browser, &outcome.bag, opts, report_out, errors);
+                outcome.status
+            }
+            // Not reached: collect_browser routes Firefox to the fallback.
+            Family::Firefox => collect_firefox(opts.decrypt, browser, opts, report_out, errors),
+            Family::Safari => {
+                "not-applicable: Safari stores are not decrypted by this tool".to_string()
+            }
+        }
     }
 }
 
@@ -195,48 +211,55 @@ fn collect_windows(
             }
         }
     }
-    collect_fallback(browser, opts, report_out, errors);
-    "skipped: credential stores require in-browser extraction".to_string()
+    // Firefox (the only family reaching here): read locally, reporting the
+    // key4.db outcome. Chromium always returns inside the hollow branch.
+    collect_fallback(browser, opts, report_out, errors)
 }
 
-/// Fallback collection when key retrieval is not requested / not possible:
+/// Fallback collection when key retrieval is not requested / not possible.
+/// Returns the key status ("key4" / "unavailable: ..." / "not-requested").
 ///
-/// * Windows: ONLY plaintext stores (Chromium credential stores are never
-///   opened by this process; Firefox uses no Windows secret services so all
-///   its stores are read).
-/// * Other platforms: every store is read with an EMPTY bag: exact counts
-///   plus sealed rows (values empty, `password_stored` intact). The macOS
-///   Keychain read stays inside `keys::resolve`, which is only called on the
-///   decryption path.
+/// * Windows: ONLY plaintext stores for Chromium (its credential stores are
+///   never opened by this process).
+/// * Other platforms: every Chromium store is read with an EMPTY bag: exact
+///   counts plus sealed rows (values empty, `password_stored` intact). The
+///   macOS Keychain read stays inside `keys::resolve_chromium`, which is only
+///   called on the decryption path.
+/// * Firefox reads `key4.db` locally (never intrusive), so it decrypts
+///   whenever `opts.decrypt` is on, whatever gate sent it here.
 fn collect_fallback(
     browser: &Browser,
     opts: &RunOptions,
     report_out: &mut Report,
     errors: &mut Vec<String>,
-) {
-    #[cfg(not(windows))]
-    {
-        collect_local(
-            browser,
-            &crate::crypt::KeyBag::default(),
-            opts,
-            report_out,
-            errors,
-        );
-    }
-    #[cfg(windows)]
-    {
-        for profile in &inventory::profiles(browser) {
-            let mut summary = ProfileSummary {
-                browser: browser.id.to_string(),
-                profile: profile.name.clone(),
-                display_name: profile.display_name.clone(),
-                path: profile.path.to_string_lossy().into_owned(),
-                is_default: profile.is_default,
-                ..ProfileSummary::default()
-            };
-            match browser.family {
-                Family::Chromium => {
+) -> String {
+    match browser.family {
+        Family::Firefox => collect_firefox(opts.decrypt, browser, opts, report_out, errors),
+        Family::Safari => {
+            "not-applicable: Safari stores are not decrypted by this tool".to_string()
+        }
+        Family::Chromium => {
+            #[cfg(not(windows))]
+            {
+                collect_local(
+                    browser,
+                    &crate::crypt::KeyBag::default(),
+                    opts,
+                    report_out,
+                    errors,
+                );
+            }
+            #[cfg(windows)]
+            {
+                for profile in &inventory::profiles(browser) {
+                    let mut summary = ProfileSummary {
+                        browser: browser.id.to_string(),
+                        profile: profile.name.clone(),
+                        display_name: profile.display_name.clone(),
+                        path: profile.path.to_string_lossy().into_owned(),
+                        is_default: profile.is_default,
+                        ..ProfileSummary::default()
+                    };
                     stores::chromium::plaintext_rows(
                         browser,
                         profile,
@@ -245,33 +268,25 @@ fn collect_fallback(
                         &mut summary,
                         errors,
                     );
+                    report_out.profiles.push(summary);
                 }
-                Family::Firefox => {
-                    stores::firefox::all_rows(
-                        browser,
-                        profile,
-                        opts,
-                        report_out,
-                        &mut summary,
-                        errors,
-                    );
-                }
-                Family::Safari => {}
             }
-            report_out.profiles.push(summary);
+            "not-requested".to_string()
         }
     }
 }
 
-/// The local pass with resolved keys (off-Windows production path).
-#[cfg(not(windows))]
-fn collect_local(
+/// The per-profile Firefox pass, used by every policy branch. Folds the
+/// per-profile key statuses into one browser status: "key4" wins; otherwise
+/// the first "unavailable"/"not-requested" is reported.
+fn collect_firefox(
+    decrypt: bool,
     browser: &Browser,
-    bag: &crate::crypt::KeyBag,
     opts: &RunOptions,
     report_out: &mut Report,
     errors: &mut Vec<String>,
-) {
+) -> String {
+    let mut best = String::new();
     for profile in &inventory::profiles(browser) {
         let mut summary = ProfileSummary {
             browser: browser.id.to_string(),
@@ -281,35 +296,64 @@ fn collect_local(
             is_default: profile.is_default,
             ..ProfileSummary::default()
         };
-        match browser.family {
-            Family::Chromium => {
-                stores::chromium::credential_rows(
-                    browser,
-                    profile,
-                    bag,
-                    opts,
-                    &mut summary,
-                    errors,
-                    &mut |row| {
-                        if report_out.row_fits(&row, opts.max_items) {
-                            report_out.push_row(row);
-                        }
-                    },
-                );
-                stores::chromium::plaintext_rows(
-                    browser,
-                    profile,
-                    opts,
-                    report_out,
-                    &mut summary,
-                    errors,
-                );
-            }
-            Family::Firefox => {
-                stores::firefox::all_rows(browser, profile, opts, report_out, &mut summary, errors);
-            }
-            Family::Safari => {}
+        let status = stores::firefox::all_rows(
+            browser,
+            profile,
+            opts,
+            decrypt,
+            report_out,
+            &mut summary,
+            errors,
+        );
+        report_out.profiles.push(summary);
+        if status == "key4" {
+            best = status;
+            break;
         }
+        if best.is_empty() {
+            best = status;
+        }
+    }
+    if best.is_empty() {
+        "not-requested".to_string()
+    } else {
+        best
+    }
+}
+
+/// The local Chromium pass with resolved keys (off-Windows decryption path).
+#[cfg(not(windows))]
+fn collect_local(
+    browser: &Browser,
+    bag: &crate::crypt::KeyBag,
+    opts: &RunOptions,
+    report_out: &mut Report,
+    errors: &mut Vec<String>,
+) {
+    debug_assert_eq!(browser.family, Family::Chromium);
+    for profile in &inventory::profiles(browser) {
+        let mut summary = ProfileSummary {
+            browser: browser.id.to_string(),
+            profile: profile.name.clone(),
+            display_name: profile.display_name.clone(),
+            path: profile.path.to_string_lossy().into_owned(),
+            is_default: profile.is_default,
+            ..ProfileSummary::default()
+        };
+        stores::chromium::credential_rows(
+            browser,
+            profile,
+            bag,
+            opts,
+            &mut summary,
+            errors,
+            &mut |row| {
+                if report_out.row_fits(&row, opts.max_items) {
+                    report_out.push_row(row);
+                }
+            },
+        );
+        stores::chromium::plaintext_rows(browser, profile, opts, report_out, &mut summary, errors);
         report_out.profiles.push(summary);
     }
 }

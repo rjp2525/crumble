@@ -32,9 +32,11 @@ Supported browsers: Chrome, Edge, Brave, Chromium, Opera, Vivaldi, Firefox
     the system unlock dialog).
   - *Linux*: legacy `v10` via the well-known hardcoded key; keyring-wrapped
     `v11` values are reported unsupported.
-  - Firefox logins are NSS-encrypted and are reported as metadata only
-    (hostname plus presence of a stored secret). Firefox cookie values are
-    plaintext.
+  - *Firefox*: logins via the per-profile `key4.db` master key
+    (SHA1/HMAC-3DES PBE on legacy profiles, PBES2 with PBKDF2-HMAC-SHA256
+    and AES-256-CBC on Firefox 75 and later). Profiles protected by a master
+    password, and pre-Firefox 58 `key3.db` profiles, are reported as
+    unavailable. Cookie values are plaintext.
 - **Clean reads:** live databases are never opened in place. Every store is
   byte-copied (with WAL sidecars) into a private, owner-only temp directory
   under a neutral name and queries run against the copy.
@@ -117,6 +119,7 @@ One JSON report (or JSONL: a summary record, then one record per row with a
   (`medium` when decryptable secret material is present, `low` when a store
   existed but could not be read, else `info`).
 - `key_status`: per-browser master-key outcome (`abe`, `dpapi`, `keychain`,
+  `key4`,
   `peanuts`, `not-applicable: …`, `unavailable: …`, `error: …`).
 - `collection_errors`: store-level failures as `browser/profile/store:
   reason`; an unreadable store is recorded, never reported as empty.
@@ -142,11 +145,11 @@ authorization: it reads what browsers store locally for their own user.
 Every such machine is readable by software running as that user. That is
 the finding `crumble` is built to demonstrate to a customer.
 
-**Why is Firefox login decryption unsupported?** Firefox protects logins
-with NSS (3DES/AES under a `key4.db` master key, itself optionally
-password-wrapped by a primary password). Decrypting without the primary
-password is not implemented; the metadata (hostname, `password_stored`) is
-still reported.
+**Why are some Firefox logins sealed?** Either the profile has a master
+password set (the empty-password key derivation fails the built-in
+password check), or the profile predates Firefox 58 and still uses
+`key3.db` (Berkeley DB, unsupported). Both are reported in `key_status`
+and `collection_errors`; every other Firefox login decrypts.
 
 **Why does macOS report the key as unavailable?** The login keychain is
 locked or its per-item ACL denied the read. `crumble` never triggers

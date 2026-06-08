@@ -34,6 +34,8 @@ pub struct KeyOutcome {
 }
 
 impl KeyOutcome {
+    // Unused on platforms whose Chromium path always resolves (Linux).
+    #[allow(dead_code)]
     fn unavailable(status: impl Into<String>) -> Self {
         Self {
             bag: KeyBag::default(),
@@ -42,24 +44,18 @@ impl KeyOutcome {
     }
 }
 
-/// Resolves the master keys for one browser. The caller skips this only when
-/// the run config forbids key retrieval (decryption off, or EDR present with
-/// `respect_edr`).
+/// Resolves the master keys for one Chromium browser. The caller skips this
+/// only when the run config forbids key retrieval (decryption off, or EDR
+/// present with `respect_edr`). Firefox resolves per profile inside the store
+/// reader (see `crate::stores::firefox_key`); Safari is inventory-only.
 #[must_use]
-pub fn resolve(browser: &Browser) -> KeyOutcome {
-    match browser.family {
-        Family::Firefox => KeyOutcome::unavailable(
-            "not-applicable: Firefox logins are NSS-encrypted (unsupported)",
-        ),
-        Family::Safari => {
-            KeyOutcome::unavailable("not-applicable: Safari stores are not decrypted by this tool")
-        }
-        Family::Chromium => resolve_chromium(browser),
-    }
+pub fn resolve_chromium(browser: &Browser) -> KeyOutcome {
+    debug_assert_eq!(browser.family, Family::Chromium);
+    chromium_keys(browser)
 }
 
 #[cfg(windows)]
-fn resolve_chromium(_browser: &Browser) -> KeyOutcome {
+fn chromium_keys(_browser: &Browser) -> KeyOutcome {
     // On Windows, master-key resolution happens exclusively inside the
     // hollowed browser payload (see win32::proxy): the elevation service
     // unwraps the ABE key and DPAPI runs under the browser's identity. This
@@ -70,7 +66,7 @@ fn resolve_chromium(_browser: &Browser) -> KeyOutcome {
 }
 
 #[cfg(target_os = "macos")]
-fn resolve_chromium(browser: &Browser) -> KeyOutcome {
+fn chromium_keys(browser: &Browser) -> KeyOutcome {
     if browser.safe_storage.is_empty() {
         return KeyOutcome::unavailable("unavailable: no Safe Storage service known");
     }
@@ -125,7 +121,7 @@ fn resolve_chromium(browser: &Browser) -> KeyOutcome {
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
-fn resolve_chromium(_browser: &Browser) -> KeyOutcome {
+fn chromium_keys(_browser: &Browser) -> KeyOutcome {
     // Legacy v10 blobs decrypt under the well-known "peanuts" key. v11
     // (keyring-wrapped) blobs fail per-value.
     KeyOutcome {
@@ -138,7 +134,7 @@ fn resolve_chromium(_browser: &Browser) -> KeyOutcome {
 }
 
 #[cfg(not(any(unix, windows)))]
-fn resolve_chromium(_browser: &Browser) -> KeyOutcome {
+fn chromium_keys(_browser: &Browser) -> KeyOutcome {
     KeyOutcome::unavailable("unsupported: platform")
 }
 
@@ -160,12 +156,13 @@ mod tests {
     }
 
     #[test]
-    fn firefox_and_safari_are_not_applicable() {
-        let firefox = browser("firefox", Family::Firefox, "");
-        let outcome = resolve(&firefox);
+    fn chromium_status_is_a_machine_string() {
+        let outcome = resolve_chromium(&browser("chrome", Family::Chromium, ""));
         assert!(outcome.bag.is_empty());
-        assert!(outcome.status.starts_with("not-applicable"));
-        let safari = browser("safari", Family::Safari, "");
-        assert!(resolve(&safari).status.starts_with("not-applicable"));
+        assert!(
+            outcome.status.starts_with("unavailable")
+                || outcome.status == "keychain"
+                || outcome.status == "peanuts"
+        );
     }
 }

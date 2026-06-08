@@ -44,6 +44,11 @@ sha2 = "0.10"
 # Local State key blobs are base64 with an ASCII provider prefix.
 base64 = "0.22"
 
+# Firefox NSS key material: 3DES-CBC for legacy key4.db profiles, HMAC-SHA1
+# in the PBE key derivation.
+des = "0.8"
+hmac = "0.12"
+
 # Unguessable per-run auth token for the Windows payload channel.
 getrandom = "0.2"
 

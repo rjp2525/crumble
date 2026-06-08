@@ -192,6 +192,7 @@ pub(crate) fn download_state(state: i64) -> &'static str {
 
 pub(crate) mod chromium;
 pub(crate) mod firefox;
+pub(crate) mod firefox_key;
 
 #[cfg(test)]
 mod tests {

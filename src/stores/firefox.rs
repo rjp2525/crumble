@@ -1,8 +1,11 @@
-//! Firefox store extraction. Logins are NSS-encrypted and reported as
-//! metadata only (hostname + `password_stored` are the exposure proof);
-//! cookie values are plaintext; history/bookmarks live in `places.sqlite`,
-//! autofill in `formhistory.sqlite`, extensions in `extensions.json`.
-//! Firefox downloads (moz_annos) are not extracted by this version.
+//! Firefox store extraction. Logins are NSS-encrypted in `logins.json`
+//! under the per-profile master key in `key4.db` (see
+//! [`firefox_key`]); with a resolved key the username and password come
+//! out decrypted, otherwise the metadata (hostname plus `password_stored`)
+//! is the exposure proof. Cookie values are plaintext; history and
+//! bookmarks live in `places.sqlite`, autofill in `formhistory.sqlite`
+//! and extensions in `extensions.json`. Firefox downloads (moz_annos)
+//! are not extracted by this version.
 
 use rusqlite::Connection;
 
@@ -11,24 +14,45 @@ use crate::model::{
     Autofill, Bookmark, Cookie, Extension, HistoryEntry, Login, ProfileSummary, Report,
 };
 use crate::options::RunOptions;
+use crate::stores::firefox_key;
 use crate::stores::{each_row, int, limit_clause, note_error, open_store, text};
 use crate::timestamp;
 
 /// Extracts every selected artifact of one Firefox profile into `report`.
+/// Returns the profile's key status: "key4" when the master key resolved,
+/// "unavailable: ..." or "not-requested" otherwise.
 pub(crate) fn all_rows(
     browser: &Browser,
     profile: &Profile,
     opts: &RunOptions,
+    decrypt: bool,
     report: &mut Report,
     summary: &mut ProfileSummary,
     errors: &mut Vec<String>,
-) {
+) -> String {
     if browser.family != Family::Firefox {
-        return;
+        return "not-applicable".to_string();
     }
+    let mut status = "not-requested".to_string();
     if opts.wants_artifact("credentials") {
+        let key = if decrypt {
+            match firefox_key::resolve(&profile.path) {
+                Ok(key) => Some(key),
+                Err(reason) => {
+                    note_error(errors, browser, profile, "key4.db", &reason);
+                    status = format!("unavailable: {reason}");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        if key.is_some() {
+            status = "key4".to_string();
+        }
         logins_json(
             &profile.path.join("logins.json"),
+            key.as_ref(),
             browser,
             profile,
             opts,
@@ -90,12 +114,17 @@ pub(crate) fn all_rows(
             report,
         );
     }
+    status
 }
 
-/// `logins.json`: usernames/passwords are NSS-encrypted (unsupported);
-/// hostname + password_stored are the exposure proof.
+/// `logins.json`: `encryptedUsername` / `encryptedPassword` are NSS
+/// envelopes under the profile master key; with a key they come out
+/// decrypted, without one the hostname and `password_stored` are the
+/// exposure proof.
+#[allow(clippy::too_many_arguments)]
 fn logins_json(
     path: &std::path::Path,
+    key: Option<&firefox_key::FirefoxKeys>,
     browser: &Browser,
     profile: &Profile,
     opts: &RunOptions,
@@ -130,13 +159,25 @@ fn logins_json(
         if opts.max_items != 0 && report.credentials.len() >= opts.max_items as usize {
             break;
         }
+        let decrypt_field = |field: &str| -> String {
+            let Some(key) = key else {
+                return String::new();
+            };
+            let b64 = json_str(login, field);
+            if b64.is_empty() {
+                return String::new();
+            }
+            firefox_key::decrypt_entry(key, &b64)
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                .unwrap_or_default()
+        };
         report.credentials.push(Login {
             browser: browser.id.to_string(),
             profile: profile.name.clone(),
             origin_url: json_str(login, "hostname"),
             action_url: String::new(),
-            username: String::new(),
-            password: String::new(),
+            username: decrypt_field("encryptedUsername"),
+            password: decrypt_field("encryptedPassword"),
             password_stored: login.get("encryptedPassword").is_some(),
             date_created: json_ms_time(login.get("timeCreated")),
             date_last_used: json_ms_time(login.get("timeLastUsed")),
@@ -498,15 +539,17 @@ mod tests {
         let mut report = Report::default();
         let mut summary = ProfileSummary::default();
         let mut errors = Vec::new();
-        all_rows(
+        let status = all_rows(
             &def,
             &found[0],
             &opts,
+            false, // no key4.db in the fixture: metadata-only logins
             &mut report,
             &mut summary,
             &mut errors,
         );
 
+        assert_eq!(status, "not-requested");
         assert_eq!(summary.cookie_count, 1);
         assert_eq!(summary.history_count, 1);
         assert_eq!(summary.credential_count, 1);
